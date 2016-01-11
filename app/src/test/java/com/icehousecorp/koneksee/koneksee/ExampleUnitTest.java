@@ -1,4 +1,4 @@
-package com.icehousecorp.koneksee.koneksee;
+package com.icehousecorp.koneksee.android;
 
 import org.junit.Test;
 

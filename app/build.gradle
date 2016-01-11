@@ -1,27 +1,137 @@
 apply plugin: 'com.android.application'
+apply plugin: 'io.fabric'
+apply plugin: 'me.tatarka.retrolambda'
 
 android {
-    compileSdkVersion 23
-    buildToolsVersion "23.0.2"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+
+    packagingOptions {
+        exclude 'META-INF/services/javax.annotation.processing.Processor'
+    }
 
     defaultConfig {
-        applicationId "com.icehousecorp.koneksee.koneksee"
-        minSdkVersion 15
-        targetSdkVersion 23
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+
+        testInstrumentationRunner 'android.support.test.runner.AndroidJUnitRunner'
     }
+
+    signingConfigs {
+        release {
+            storeFile file(certificateKonekseeLocation)
+            storePassword certificateKonekseeStorePassword
+            keyAlias certificateKonekseeReleaseKeyAlias
+            keyPassword certificateKonekseeReleaseKeyPassword
+        }
+    }
+
     buildTypes {
         release {
+            minifyEnabled false
+            zipAlignEnabled true
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
+    productFlavors {
+        dev {
+            applicationId "com.icehousecorp.koneksee.android.dev"
+            versionName "1.0-dev"
+            ext.enableCrashlytics = false
+            buildConfigField "String", "SERVER_URL", String.format("\"%s\"", devKonekseeServerUrl)
+            buildConfigField "String", "CLIENT_ID", String.format("\"%s\"", devKonekseeClientId)
+            buildConfigField "String", "CLIENT_SECRET", String.format("\"%s\"", devKonekseeClientSecret)
+            resValue "string", "app_name", String.format("%s", devKonekseeAppName)
+        }
+        staging {
+            applicationId "com.icehousecorp.koneksee.android.stage"
+            versionName "1.0-stage"
+            ext.betaDistributionGroupAliases = "internal-qa"
+            buildConfigField "String", "SERVER_URL", String.format("\"%s\"", stagingKonekseeServerUrl)
+            buildConfigField "String", "CLIENT_ID", String.format("\"%s\"", stagingKonekseeClientId)
+            buildConfigField "String", "CLIENT_SECRET", String.format("\"%s\"", stagingKonekseeClientSecret)
+            resValue "string", "app_name", String.format("%s", stagingKonekseeAppName)
+        }
+        production {
+            ext.betaDistributionGroupAliases = "internal-qa"
+            buildConfigField "String", "SERVER_URL", String.format("\"%s\"", productionKonekseeServerUrl)
+            buildConfigField "String", "CLIENT_ID", String.format("\"%s\"", productionKonekseeClientId)
+            buildConfigField "String", "CLIENT_SECRET", String.format("\"%s\"", productionKonekseeClientSecret)
+            resValue "string", "app_name", String.format("%s", productionKonekseeAppName)
+        }
+    }
+
+    // Always show the result of every unit test, even if it passes.
+    testOptions.unitTests.all {
+        testLogging {
+            events 'passed', 'skipped', 'failed', 'standardOut', 'standardError'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    testCompile 'junit:junit:4.12'
-    compile 'com.android.support:appcompat-v7:23.1.1'
-    compile 'com.android.support:design:23.1.1'
+    // App's dependencies, including test
+    compile "com.android.support:appcompat-v7:$rootProject.supportLibraryVersion"
+    compile "com.android.support:design:$rootProject.supportLibraryVersion"
+    compile "com.android.support:recyclerview-v7:$rootProject.supportLibraryVersion"
+    compile "com.android.support:support-v4:$rootProject.supportLibraryVersion"
+    compile "com.github.bumptech.glide:glide:$rootProject.glideVersion"
+    compile "io.reactivex:rxjava:$rootProject.rxjavaVersion"
+    compile "io.reactivex:rxandroid:$rootProject.rxandroidVersion"
+    compile "com.jakewharton.rxbinding:rxbinding:$rootProject.rxbindingVersion"
+    compile "com.squareup.retrofit:retrofit:$rootProject.retrofitVersion"
+    compile "com.joooonho:selectableroundedimageview:$rootProject.roundedImageVersion"
+    compile "com.google.guava:guava:$rootProject.guavaVersion"
+    compile "com.android.support.test.espresso:espresso-idling-resource:$rootProject.espressoVersion"
+
+    // Dependencies for local unit tests
+    testCompile "junit:junit:$rootProject.junitVersion"
+    testCompile "org.mockito:mockito-all:$rootProject.mockitoVersion"
+    testCompile "org.hamcrest:hamcrest-all:$rootProject.hamcrestVersion"
+    testCompile "org.powermock:powermock-module-junit4:$rootProject.powerMockito"
+    testCompile "org.powermock:powermock-api-mockito:$rootProject.powerMockito"
+
+    // Android Testing Support Library's runner and rules
+    androidTestCompile "com.android.support.test:runner:$rootProject.runnerVersion"
+    androidTestCompile "com.android.support.test:rules:$rootProject.runnerVersion"
+
+    // Espresso UI Testing dependencies.
+    androidTestCompile "com.android.support.test.espresso:espresso-core:$rootProject.espressoVersion"
+    androidTestCompile "com.android.support.test.espresso:espresso-contrib:$rootProject.espressoVersion"
+    androidTestCompile "com.android.support.test.espresso:espresso-intents:$rootProject.espressoVersion"
+
+}
+
+/*
+Resolves dependency versions across test and production APKs, specifically, transitive
+dependencies. This is required since Espresso internally has a dependency on support-annotations.
+*/
+configurations.all {
+    resolutionStrategy.force "com.android.support:support-annotations:$rootProject.supportLibraryVersion"
+}
+
+/*
+All direct/transitive dependencies shared between your test and production APKs need to be
+excluded from the test APK! This is necessary because both APKs will contain the same classes. Not
+excluding these dependencies from your test configuration will result in an dex pre-verifier error
+at runtime. More info in this tools bug: (https://code.google.com/p/android/issues/detail?id=192497)
+*/
+configurations.compile.dependencies.each { compileDependency ->
+    println "Excluding compile dependency: ${compileDependency.getName()}"
+    configurations.androidTestCompile.dependencies.each { androidTestCompileDependency ->
+        configurations.androidTestCompile.exclude module: "${compileDependency.getName()}"
+    }
 }

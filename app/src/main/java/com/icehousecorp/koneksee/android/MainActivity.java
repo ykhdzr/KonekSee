@@ -1,4 +1,4 @@
-package com.icehousecorp.koneksee.koneksee;
+package com.icehousecorp.koneksee.android;
 
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
